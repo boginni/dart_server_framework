@@ -91,9 +91,173 @@ Future<Response> me(Request request){
     return Response(user.toJson());
 }
 
-Routes.get('/hello-world', (Request request) {
+Routes.get('/me', (Request request) {
     return await authorizationEnforcerMiddleware(request, me);
 });
 ```
 
+### Middlewares com prefixo
+um Middleware deve conseguir agrupar um prefixo:
+
+```dart
+final UserController userController;
+
+Routes.middleware(authorizationEnforcerMiddleware).prefix('/user', (Router router) {
+    router.get('/', userController.all);
+    router.get('/{id}', userController.index);
+    router.post('/', userController.store);
+    router.put('/{id}', userController.update);
+    router.delete('/{id}', userController.delete);
+});
+```
+
+### Validação de Request
+Um Request deve conseguir validar e injetar no request Automaticamente
+
+
+Declaração do request:
+```dart
+class CreateUserBody extends RequestBody {
+
+    @Validation([Validator.min(4), Validador.mandatory])
+    final String nome;
+    @Validation([Validator.email, Validador.mandatory])
+    final String login;
+    @Validation([Validator.password, Validador.mandatory])
+    final String senha;
+    @Validation([Validador.optional])
+    final String cidade;
+    @Validation([Validador.optional])
+    final int idade;
+
+    const CreateUserBody({
+        required this.nome,
+        required this.login,
+        required this.senha,
+        required this.cidade,
+        required this.idade,
+    });
+}
+```
+
+na função de request:
+```dart
+
+class UserController {
+
+
+    Future<Response> store<CreateUserBody>(Request request){
+        userRepository.create(request);
+    }
+
+}
+
+``` 
+### Injeção de Parametros como Entity
+Um Request deve conseguir extrair uma entity e injetar na função
+
+
+no caso de um request com ID
+`DELETE: /user/{id}`
+
+
+Declaração do request:
+```dart
+class UserEntity {
+    final int id;
+    final String name;
+    final String login;
+    final String senha;
+    final String cidade;
+    final int idade;
+}
+```
+
+na função de request:
+```dart
+class UserController {
+
+    Future<Response> delete<CreateUserBody>(Request request, UserEntity entity){
+        userRepository.delete(entity.id);
+    }
+
+}
+``` 
+
+#### Problema Multiplos parâmetros na rota:
+A o roteamente deverá conseguir encontrar Todas an entidades do request
+`DELETE: /company/{id}/car/{carModelId}`
+
+```dart
+class CompanyCarTypeController {
+
+    Future<Response> delete(Request request, CompanyEntity company, CarTypeEntity carType){
+        company.deleteCarType(carType.id);
+    }
+
+}
+```
+
+## Database
+
+
+### Query Builder
+A api não pode dependenter do tipo de banco de dados, é necessário evitar a utilização de sql:
+
+#### QueryBuilder Método 1
+```dart
+class ProfileRepository {
+
+    final QueryBuilder queryBuilder;
+
+    UserRepository({
+        required this.queryBuilder,
+    });
+
+    Future<Pagination<UserEntity>> getFollowers(userId) async {
+       return await queryBuilder.select('user_followers').where('user_id', comparision: '=', userId).paginated();
+    }
+
+}
+```
+
+#### QueryBuilder Método 2
+aidna há necessidade de definir melhor como funciona o query builder, mas o ideal é que não haja necessidade de passar nome de campos por String `user_id`
+
+```dart
+
+class ProfileRepository {
+
+    UserRepository({
+        required this.queryBuilder,
+    });
+
+    Future<Pagination<UserEntity>> getFollowers(userId) async {
+        /// queryBuilder<UserFollowerEntity>
+       final queryBuilder = UserFollowerEntity.select();
+
+       return queryBuilder.where('user_id', comparision: '=', userId).paginated()..map((e) => e.follower);
+    }
+
+}
+```
+
+### Tratamento de Entitades 
+
+Classes devem permitir saber que tipo de dados vão poder retornar;
+
+```dart
+
+class UserEntity {
+    final int id;
+    @Exposed()
+    final String name;
+    final String login;
+    final String senha;
+    @Exposed()
+    final String cidade;
+    @Exposed()
+    final int idade;
+}
+```
 
